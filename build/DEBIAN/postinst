@@ -1,0 +1,20 @@
+#!/bin/bash
+
+# Source debconf library.
+. /usr/share/debconf/confmodule
+
+apt-cacher-client-helper -e &> /dev/null
+result=$?
+# result of 3 means no proxy is set
+if [[ "$result" -eq "3" ]]; then
+    db_reset apt-cacher-client-helper/proxy || true
+    db_input high apt-cacher-client-helper/proxy || true
+    db_go
+    db_get apt-cacher-client-helper/proxy    
+    if [ -n "$RET" ]; then
+        apt-cacher-client-helper -p "${RET}" &> /dev/null
+        apt-cacher-client-helper -e &> /dev/null
+    fi
+fi
+
+exit 0

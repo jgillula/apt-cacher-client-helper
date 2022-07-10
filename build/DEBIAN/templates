@@ -1,0 +1,4 @@
+Template: apt-cacher-client-helper/proxy
+Type: string
+Default:
+Description: apt is not configured to use a proxy server. Please provide one, or just hit enter to skip this step:

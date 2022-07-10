@@ -1,0 +1,115 @@
+#!/bin/bash
+
+# set -x
+
+APT_CACHER_CLIENT_HELPER_LIB_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+. "${APT_CACHER_CLIENT_HELPER_LIB_DIR}"/common_functions.sh
+
+show_usage() {
+    echo "Usage: ${0##*/} [-e|-d|-h|-V] [-a] [-p]"
+}
+
+show_help() {
+    show_usage
+    echo "Automatically detect your current apt-cacher server by reading apt's config to find the current proxy server ($APT_CACHER_SERVER), and then modify apt's .list files so all https repos pass through that server" | fold -s -w $columns -
+    help_string=$(cat <<EOF
+  -e, --enable|Modify apt's .list files so all https repos pass through the current proxy server ($APT_CACHER_SERVER), and automatically modify any future https repos as well
+  -a, --ask-for-proxy|If apt is not configured to use a proxy, ask the user if they would like to set one. Must be used in conjunction with -e
+  -p, --proxy=PROXY|Set apt to use the proxy server PROXY
+  -d, --disable|Revert changes to all .list files ${0##*/} would normally modify, and don't make any future changes
+  -h, --help|Show this help
+  -V, --version|Show the version number
+EOF
+               )
+    echo "$help_string" | column -t -s '|' -c $columns
+}
+
+show_version () {
+    echo "${0##*/} ${VERSION}"
+}
+
+set_proxy_server() {
+    proxy_server="$1"
+    echo -e "# This proxy set interactively by apt-cacher-client-helper\nAcquire::http::proxy \"${proxy_server}\";\n" > "$apt_cacher_proxy_config_file"
+}
+
+enable_apt_cacher_client_helper () {
+    if [ ! -z "$ASK_FOR_PROXY" ] && [ "$APT_CACHER_SERVER" == "$PROXY_SERVER_NOT_SET_STRING" ]; then
+        echo -e -n "apt is not configured to use a proxy server.\nPlease provide one (in the form http://name or http://name:port)\nOr just hit enter to skip this step: "
+        read
+        if [ ! -z "$REPLY" ]; then
+            set_proxy_server "$REPLY"
+            initialize_variables
+        fi
+    fi
+
+    check_apt_proxy_server
+
+    echo -e "# This config file created by apt-cacher-client-helper\nAPT::Update::Pre-Invoke {\"${APT_CACHER_CLIENT_HELPER_LIB_DIR}/https_repo_fixer.sh -m\";};\n" > "${apt_cacher_client_helper_https_fixer_config_file}"
+    "${APT_CACHER_CLIENT_HELPER_LIB_DIR}"/https_repo_fixer.sh -m    
+}
+
+disable_apt_cacher_client_helper () {
+    ${APT_CACHER_CLIENT_HELPER_LIB_DIR}/https_repo_fixer.sh -r
+    rm -f "${apt_cacher_client_helper_https_fixer_config_file}" "${apt_cacher_proxy_config_file}"
+}
+
+set_mode_or_error () {
+    if [ -z "$MODE" ]; then
+        MODE="$1"
+    else
+        echo "Error: you may only specify one of -e, -d, -V, or -h" | >&2 fold -s -w $columns -
+        echo "Try '${0##*/} --help' for more information" >&2
+    fi
+}
+
+initialize_variables
+
+options=`getopt -o hedVap: --long help,enable,disable,version,ask-for-proxy,proxy: -n "${0##*/}" -- "$@"`
+if test $? -ne 0 ; then
+    show_usage
+    echo "Try '${0##*/} --help' for more information"
+    exit 1
+fi
+
+
+MODE=""
+ASK_FOR_PROXY=""
+eval set -- "$options"
+
+while true ; do
+    case "$1" in
+        -h|--help) set_mode_or_error "mode_help" ; shift ;;
+        -e|--enable) set_mode_or_error "mode_enable" ; shift ;;
+        -a|--ask-for-proxy) ASK_FOR_PROXY=0 ; shift ;;
+        -p|--proxy)
+            set_proxy_server "${2}"
+            shift 2
+            ;;
+        -d|--disable) set_mode_or_error "mode_disable" ; shift ;;
+        -V|--version) set_mode_or_error "show_version" ; shift ;;
+        --) shift ; break ;;
+        *) >&2 echo "Error: Problem parsing command-line arguments!" ; exit 1 ;;
+    esac    
+done
+
+case "$MODE" in
+    mode_help)
+        show_help
+        ;;
+    mode_enable)
+        check_root
+        enable_apt_cacher_client_helper
+        ;;
+    mode_disable)
+        check_root
+        disable_apt_cacher_client_helper
+        ;;
+    show_version)
+        show_version
+        ;;
+    *)
+        show_usage
+        ;;
+esac
+exit 0

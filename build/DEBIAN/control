@@ -1,0 +1,22 @@
+Package: apt-cacher-client-helper
+Version: VERSION
+Architecture: all
+Maintainer: Jeremy Gillula <jgillula+aptcacherhelper@gmail.com>
+Section: net
+Priority: optional
+Pre-Depends: apt, sed, bsdmainutils, coreutils, grep, perl, bash
+Homepage: https://github.com/jgillula/apt-cacher-client-helper
+Description: A helper for clients using an apt-cacher proxy server
+ Apt-cacher (or apt-cacher-ng) is a caching proxy for downloading
+ packages from Debian-style software repositories (or possibly from
+ other types).
+ .
+ It's easy to proxy http connections through apt-cacher, but it's more
+ complicated to proxy https connections. (See
+ https://www.unix-ag.uni-kl.de/~bloch/acng/html/config-servquick.html#config-client
+ for more information.)
+ .
+ apt-cacher-client-helper is a simple tool that automates modifying
+ apt's list files so that https repos also point to the apt-cacher
+ proxy.
+
